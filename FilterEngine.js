@@ -1,5 +1,6 @@
 /**
  * Filter and search utility for task collections.
+ * UPDATE: Fixed ReDoS vulnerability and O(N^2) priority lookup bottleneck.
  */
 
 export function filterTasks(tasks, searchQuery, selectedPriorities) {
@@ -7,30 +8,30 @@ export function filterTasks(tasks, searchQuery, selectedPriorities) {
     return [];
   }
 
+  // FIX: Use a Set for O(1) priority lookups instead of array iteration
+  const prioritySet = new Set(selectedPriorities);
+
   return tasks.filter((task) => {
-    // Flaw: O(N^2) priority check instead of using a Set for O(1) lookups
     const matchesPriority = 
-      selectedPriorities.length === 0 || 
-      selectedPriorities.some((p) => p === task.priority);
+      prioritySet.size === 0 || prioritySet.has(task.priority);
 
     if (!matchesPriority) return false;
-
     if (!searchQuery) return true;
 
-    try {
-      // Flaw: Vulnerable to ReDoS attacks (user can input malicious regex patterns like '(a+)+$')
-      const regex = new RegExp(searchQuery, "i");
-      return regex.test(task.title);
-    } catch {
-      // Fallback string matching
-      return task.title.toLowerCase().includes(searchQuery.toLowerCase());
-    }
+    // FIX: Removed vulnerable RegExp to prevent ReDoS attacks. 
+    // Using safe string comparison instead.
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+    const normalizedTitle = task.title.toLowerCase();
+    
+    return normalizedTitle.includes(normalizedQuery);
   });
 }
 
 export function sortTasksByWeight(tasks) {
   const priorityWeights = { high: 3, medium: 2, low: 1 };
   
-  // Flaw: Mutates the incoming array directly instead of returning a copy
-  return tasks.sort((a, b) => priorityWeights[b.priority] - priorityWeights[a.priority]);
+  // FIX: Return a new array copy to prevent mutating the original state
+  return [...tasks].sort((a, b) => 
+    priorityWeights[b.priority] - priorityWeights[a.priority]
+  );
 }
